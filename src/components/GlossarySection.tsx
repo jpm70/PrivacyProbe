@@ -1,277 +1,260 @@
 import React, { useState } from 'react';
-import { BookMarked, ChevronDown, ChevronUp, Search, Key, Shield, Layers, HelpCircle, Cpu } from 'lucide-react';
+import { BookMarked, ChevronDown, Cpu, Key, Layers, Scale, Search, Shield } from 'lucide-react';
+import { useUi } from '../i18n';
 
-interface GlossaryTerm {
+type Category = 'math' | 'api' | 'network' | 'defence' | 'law';
+type Pair = [string, string];
+
+interface Term {
   id: string;
-  term: string;
-  category: 'Criptografía & Matemáticas' | 'APIs Web & Rastreo' | 'Redes' | 'Contramedidas';
-  shortDefinition: string;
-  detailedExplanation: string;
-  exampleOrFormula?: string;
-  mitigationAdvice: string;
+  category: Category;
+  term: Pair;
+  short: Pair;
+  detail: Pair;
+  example?: string;
+  advice: Pair;
 }
 
-const GLOSSARY_TERMS: GlossaryTerm[] = [
+const TERMS: Term[] = [
   {
-    id: 'canvas-fingerprinting',
-    term: 'Canvas Fingerprinting',
-    category: 'APIs Web & Rastreo',
-    shortDefinition:
-      'Método de rastreo que aprovecha las variaciones microscópicas con las que cada tarjeta gráfica y sistema operativo renderizan imágenes y textos en un elemento <canvas> de HTML5.',
-    detailedExplanation:
-      'Cuando un navegador web dibuja primitivas 2D (círculos, curvas bézier, sombras y tipografías con antialiasing) en un lienzo invisible, el resultado depende estrechamente de la GPU instalada, la versión del controlador gráfico, el motor de rasterización de fuentes del sistema operativo (DirectWrite en Windows, CoreText en macOS, FreeType en Linux) y la precisión de coma flotante de la CPU. Al exportar ese lienzo con toDataURL() y aplicar una función hash criptográfica, se genera un identificador que permanece constante entre diferentes sesiones y pestañas.',
-    exampleOrFormula:
-      'ctx.fillText("Texto de prueba", 10, 20) -> canvas.toDataURL() -> SHA256 / MurmurHash3 = 9f8a3c1...',
-    mitigationAdvice:
-      'Inyección de ruido estocástico (Farbling de Brave) o uso de suites con uniformidad de cohorte estricta (Tor Browser).',
+    id: 'canvas',
+    category: 'api',
+    term: ['Huella de canvas', 'Canvas fingerprinting'],
+    short: [
+      'Identificar un equipo por cómo dibuja una misma imagen en un <canvas> de HTML5.',
+      'Identifying a device by how it draws the same image on an HTML5 <canvas>.',
+    ],
+    detail: [
+      'El script dibuja texto, degradados, curvas y emojis en un lienzo invisible y lee el resultado con toDataURL() o getImageData(). Los píxeles dependen de la GPU, el controlador, el rasterizador de fuentes del sistema (DirectWrite, CoreText, FreeType) y la versión del navegador. Con el resultado se calcula un hash que se repite en cada visita.',
+      'The script draws text, gradients, curves and emoji on an invisible canvas and reads it back with toDataURL() or getImageData(). Pixels depend on the GPU, driver, system font rasteriser (DirectWrite, CoreText, FreeType) and browser version. A hash of the result repeats on every visit.',
+    ],
+    example: 'ctx.fillText("Prueba 😀", 10, 20); hash(canvas.toDataURL())',
+    advice: ['Ruido por sesión (Brave, Safari privado) o bloqueo de la lectura (Tor Browser).', 'Per-session noise (Brave, private Safari) or blocking the readback (Tor Browser).'],
   },
   {
-    id: 'webrtc-leak',
-    term: 'WebRTC Leak (Fuga de IP por WebRTC)',
-    category: 'Redes',
-    shortDefinition:
-      'Exposición de las direcciones IP locales y públicas reales del usuario mediante el protocolo WebRTC, eludiendo túneles VPN y servidores proxy HTTP/SOCKS.',
-    detailedExplanation:
-      'WebRTC (Web Real-Time Communication) es una tecnología que permite la comunicación de audio, vídeo y transferencia de archivos directa punto a punto entre navegadores sin plugins. Para establecer conexiones peer-to-peer eficaces atravesando cortafuegos y routers NAT, el navegador ejecuta el protocolo ICE (Interactive Connectivity Establishment) consultando a servidores STUN/TURN. Durante este sondeo, el navegador genera paquetes STUN vinculados a todas las interfaces físicas de red (Wi-Fi, Ethernet, adaptadores virtuales de máquina virtual), revelando la IP privada de la red de área local (LAN) e incluso la IP pública del proveedor de Internet (ISP) a pesar de que el usuario tenga una VPN activa.',
-    exampleOrFormula:
-      'RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com" }] }) -> onicecandidate expone candidates con IPs 192.168.1.X y 88.X.X.X',
-    mitigationAdvice:
-      'Deshabilitar WebRTC mediante extensiones de control de políticas, activar el enrutamiento obligatorio de WebRTC a través del proxy en Firefox (media.peerconnection.ice.proxy_only = true) o bloquear candidatos que no provengan del adaptador VPN del sistema.',
+    id: 'webrtc',
+    category: 'network',
+    term: ['Fuga de IP por WebRTC', 'WebRTC IP leak'],
+    short: [
+      'Que una web lea direcciones IP de tu equipo a través de los candidatos ICE de WebRTC.',
+      'A site reading your device IP addresses through WebRTC ICE candidates.',
+    ],
+    detail: [
+      'Para establecer llamadas, el navegador reúne las direcciones por las que se le puede alcanzar: las de sus interfaces (host) y la pública que le devuelve un servidor STUN (srflx). Hoy los navegadores ocultan la IP local tras un nombre mDNS aleatorio; el problema real aparece con VPN o proxies que solo cubren parte del tráfico (por ejemplo, solo IPv4), porque entonces WebRTC puede mostrar otra IP distinta de la que ve la web.',
+      'To set up calls, the browser gathers the addresses it can be reached at: its interfaces (host) and the public one a STUN server returns (srflx). Browsers now hide the local IP behind a random mDNS name; the real problem shows up with VPNs or proxies that only cover part of the traffic (e.g. only IPv4), because WebRTC can then reveal an IP different from the one the site sees.',
+    ],
+    example: 'candidate:… 192.168.1.20 54321 typ host  ·  candidate:… 203.0.113.7 54321 typ srflx',
+    advice: [
+      'Firefox: media.peerconnection.ice.default_address_only o proxy_only. Chrome/Edge: política WebRtcIPHandling. Y una VPN que cubra IPv6.',
+      'Firefox: media.peerconnection.ice.default_address_only or proxy_only. Chrome/Edge: WebRtcIPHandling policy. And a VPN that covers IPv6.',
+    ],
   },
   {
-    id: 'shannon-entropy',
-    term: 'Entropía de Shannon (Bits de Información)',
-    category: 'Criptografía & Matemáticas',
-    shortDefinition:
-      'Medida matemática de la incertidumbre o cantidad de información promedio contenida en una variable aleatoria o atributo de huella digital.',
-    detailedExplanation:
-      'Formulada por Claude Shannon en 1948 en su teoría matemática de la comunicación, la entropía se expresa en bits mediante la ecuación H(X) = -∑ P(x) * log₂(P(x)). En el ámbito del fingerprinting del navegador, la entropía mide cuántos bits de incertidumbre resuelve un determinado atributo. Por ejemplo, si un atributo clasifica a los usuarios en 2 grupos equiprobables al 50%, aporta exactamente 1 bit de información. Con aproximadamente 33 bits de entropía combinada entre varios atributos independientes, es posible distinguir de manera unívoca a un individuo específico entre toda la población mundial de Internet (2³³ ≈ 8.589.934.592 personas).',
-    exampleOrFormula:
-      'H(X) = - ∑ [ P(x) · log₂(P(x)) ]  |  Capacidad identificadora = 2^H',
-    mitigationAdvice:
-      'La única defensa matemática real es reducir la entropía de los atributos (uniformidad masiva) o romper la correlación temporal entre visitas (ruido por sesión).',
+    id: 'mdns',
+    category: 'network',
+    term: ['Candidatos mDNS (.local)', 'mDNS candidates (.local)'],
+    short: ['Nombres aleatorios que sustituyen a tu IP local en WebRTC.', 'Random names that replace your local IP in WebRTC.'],
+    detail: [
+      'En lugar de «192.168.1.20», el navegador anuncia algo como «3f1c…-….local», que solo resuelve dentro de tu red. Así las videollamadas en la LAN siguen funcionando sin que una web lea tu IP interna.',
+      'Instead of "192.168.1.20", the browser announces something like "3f1c…-….local", which only resolves inside your network. LAN video calls keep working without a site reading your internal IP.',
+    ],
+    advice: ['Viene activado por defecto en los navegadores actuales.', 'It is on by default in current browsers.'],
   },
   {
-    id: 'hardware-clamping',
-    term: 'Hardware Clamping (Fijación de Parámetros de Hardware)',
-    category: 'Contramedidas',
-    shortDefinition:
-      'Técnica de defensa en la que el navegador reporta valores genéricos predeterminados y acotados para APIs de hardware, independientemente de los recursos reales de la máquina física.',
-    detailedExplanation:
-      'Los navegadores modernos ofrecen APIs como navigator.hardwareConcurrency (número de núcleos o subprocesos de la CPU) y navigator.deviceMemory (cantidad de memoria RAM en Gigabytes). Un usuario con un procesador de 32 hilos y 64 GB de RAM tiene una firma de hardware sumamente inusual en comparación con la media. El Hardware Clamping intercepta estas llamadas en el motor de JavaScript y devuelve siempre una respuesta normalizada (por ejemplo, exactamente 2 núcleos y memoria omitida/indefinida), camuflando al usuario dentro de la masa demográfica más frecuente.',
-    exampleOrFormula:
-      'Object.defineProperty(navigator, "hardwareConcurrency", { get: () => 2 });',
-    mitigationAdvice:
-      'Activado de forma nativa en Tor Browser, Mullvad Browser y Firefox con la preferencia privacy.resistFingerprinting habilitada.',
+    id: 'shannon',
+    category: 'math',
+    term: ['Entropía de Shannon', 'Shannon entropy'],
+    short: ['Cuánta información aporta, de media, un atributo. Se mide en bits.', 'How much information an attribute gives on average. Measured in bits.'],
+    detail: [
+      'Definida por Claude Shannon en 1948: H(X) = −Σ P(x)·log₂ P(x). Un atributo que reparte a la población en dos grupos iguales aporta 1 bit. Hacen falta unos 33 bits para distinguir a 8.000 millones de personas (2³³ ≈ 8.600 millones). Para medirla hay que conocer cómo se reparten los valores en una población: un solo navegador no puede calcular su propia entropía.',
+      'Defined by Claude Shannon in 1948: H(X) = −Σ P(x)·log₂ P(x). An attribute splitting the population into two equal groups gives 1 bit. About 33 bits are needed to tell 8 billion people apart (2³³ ≈ 8.6 billion). Measuring it requires knowing how values are distributed in a population: a single browser cannot compute its own entropy.',
+    ],
+    example: 'H(X) = −Σ P(xᵢ) · log₂ P(xᵢ)     I(x) = −log₂ P(x)',
+    advice: ['Reducir lo que se expone o hacer que el valor sea el mismo para muchos.', 'Expose less, or make the value the same for many people.'],
   },
   {
-    id: 'audiocontext-fingerprint',
-    term: 'AudioContext Fingerprinting',
-    category: 'APIs Web & Rastreo',
-    shortDefinition:
-      'Identificación del dispositivo basada en cómo la arquitectura de la máquina procesa señales de audio sintéticas sin necesidad de emitir sonido por los altavoces.',
-    detailedExplanation:
-      'Utiliza la Web Audio API y el objeto OfflineAudioContext. El script inyecta ondas generadas mediante osciladores matemáticos hacia compresores dinámicos y filtros biquad. Debido a ligeras discrepancias en el cálculo de números de coma flotante entre microarquitecturas de procesadores (Intel, AMD, Apple Silicon, ARM) y la capa del controlador de audio del sistema operativo, el búfer de muestras PCM procesado resultante contiene diferencias infinitesimales medibles en las sumas de comprobación.',
-    exampleOrFormula:
-      'const ctx = new OfflineAudioContext(1, 44100, 44100); osc.connect(compressor); -> buffer.getChannelData(0)',
-    mitigationAdvice:
-      'Bloqueo de AudioContext para orígenes no confiables, o inyección de fluctuaciones aleatorias en los búferes de audio renderizados.',
+    id: 'normalized',
+    category: 'math',
+    term: ['Entropía normalizada y conjunto de anonimato', 'Normalised entropy and anonymity set'],
+    short: [
+      'Formas de comparar estudios de distinto tamaño y de ver con cuántos compartes huella.',
+      'Ways to compare studies of different sizes and see how many people share your fingerprint.',
+    ],
+    detail: [
+      'Con N huellas no se pueden medir más de log₂ N bits (20,98 con 2 millones). La entropía normalizada divide entre ese máximo para comparar estudios. El conjunto de anonimato es el grupo de navegadores con tu misma huella: si es de tamaño 1, eres único en esa muestra.',
+      'With N fingerprints you cannot measure more than log₂ N bits (20.98 with 2 million). Normalised entropy divides by that maximum to compare studies. The anonymity set is the group of browsers with your same fingerprint: size 1 means you are unique in that sample.',
+    ],
+    example: 'H_norm = H(X) / log₂ N',
+    advice: ['Cuanto más grande sea tu conjunto de anonimato, mejor.', 'The larger your anonymity set, the better.'],
+  },
+  {
+    id: 'audio',
+    category: 'api',
+    term: ['Huella de audio', 'Audio fingerprinting'],
+    short: ['Identificar el equipo por cómo procesa un sonido que nunca llega a sonar.', 'Identifying the device by how it processes a sound that is never played.'],
+    detail: [
+      'Con un OfflineAudioContext se genera una onda, se pasa por un compresor y se leen las muestras. Pequeñas diferencias de coma flotante entre CPU, sistema y navegador cambian el resultado.',
+      'An OfflineAudioContext generates a wave, runs it through a compressor and reads the samples. Small floating-point differences between CPU, system and browser change the result.',
+    ],
+    example: 'new OfflineAudioContext(1, 44100, 44100) → compressor → getChannelData(0)',
+    advice: ['Ruido en las muestras (Brave, Safari privado) o valor uniforme.', 'Noise in samples (Brave, private Safari) or a uniform value.'],
   },
   {
     id: 'letterboxing',
-    term: 'Letterboxing (Cuantificación de Ventana)',
-    category: 'Contramedidas',
-    shortDefinition:
-      'Adición de márgenes visuales neutros alrededor del área de navegación para forzar al sitio web a observar únicamente tamaños de pantalla redondeados y estandarizados.',
-    detailedExplanation:
-      'La resolución del monitor y las dimensiones de la ventana interior (window.innerWidth y window.innerHeight) suelen ser altamente específicas, especialmente si el usuario maximiza el navegador en monitores ultrapanorámicos o con barras de herramientas personalizadas. El Letterboxing empaqueta la vista web en múltiplos fijos (por ejemplo, bloques de 200px de ancho y 100px de alto) rellenando el espacio sobrante con barras grises invisibles o neutras, de modo que cientos de miles de usuarios reportan exactamente la misma resolución al script de rastreo.',
-    exampleOrFormula:
-      'Ventana real de 1912x983 -> Reportada al JavaScript como 1800x900 con bandas de compensación.',
-    mitigationAdvice:
-      'Característica emblemática introducida por The Tor Project y disponible en navegadores derivados de Gecko.',
+    category: 'defence',
+    term: ['Letterboxing', 'Letterboxing'],
+    short: ['Márgenes alrededor de la página para que el tamaño de ventana sea redondo.', 'Margins around the page so the window size is a round number.'],
+    detail: [
+      'El tamaño exacto de la ventana (que depende de tu monitor, tus barras y cómo la redimensionas) es muy identificativo. Tor Browser rellena con márgenes hasta un múltiplo de 200 × 100 píxeles, y muchos usuarios acaban mostrando el mismo tamaño.',
+      'The exact window size (which depends on your monitor, bars and how you resize it) is very identifying. Tor Browser pads with margins to a multiple of 200 × 100 pixels, so many users end up showing the same size.',
+    ],
+    example: '1912 × 983 → 1800 × 900',
+    advice: ['Tor Browser y Mullvad Browser. No maximices la ventana de Tor.', 'Tor Browser and Mullvad Browser. Do not maximise the Tor window.'],
   },
   {
     id: 'farbling',
-    term: 'Farbling (Envenenamiento Estocástico de Datos)',
-    category: 'Contramedidas',
-    shortDefinition:
-      'Enfoque de privacidad que altera ligeramente los valores leídos por las APIs del navegador con una cantidad minúscula de ruido determinista o pseudoaleatorio por sitio y por sesión.',
-    detailedExplanation:
-      'Desarrollado y popularizado por Brave Software, el "farbling" no bloquea el funcionamiento de Canvas, WebGL o Audio (lo cual provocaría errores o roturas visuales en páginas legítimas como editores gráficos o juegos web). En su lugar, intercepta las funciones de lectura de píxeles o coordenadas y modifica valores individuales de forma imperceptible para los ojos u oídos humanos, pero suficiente para cambiar por completo el hash criptográfico calculado por el rastreador.',
-    exampleOrFormula:
-      'pixel[i] = pixel[i] + (pseudoRandom(seed + domain) > 0.5 ? 1 : -1);',
-    mitigationAdvice:
-      'Excelente equilibrio entre privacidad robusta y compatibilidad web funcional para navegación diaria.',
+    category: 'defence',
+    term: ['Farbling (ruido)', 'Farbling (noise)'],
+    short: ['Alterar un poco lo que leen las APIs, con una semilla distinta por web y sesión.', 'Slightly altering what APIs return, with a different seed per site and session.'],
+    detail: [
+      'Es el nombre que usa Brave. No bloquea Canvas, WebGL ni Audio (eso rompería webs legítimas): modifica valores de forma imperceptible para que el hash cambie entre webs y sesiones. Dentro de una misma web y sesión el valor es estable, para no romper nada.',
+      'This is Brave\'s name for it. It does not block Canvas, WebGL or Audio (that would break legitimate sites): it changes values imperceptibly so the hash differs across sites and sessions. Within the same site and session the value is stable, so nothing breaks.',
+    ],
+    example: 'pixel[i] += rand(seed(site, session)) < 0.5 ? 1 : -1',
+    advice: ['Buen equilibrio para el día a día.', 'A good balance for everyday browsing.'],
   },
   {
-    id: 'user-agent-client-hints',
-    term: 'User-Agent Client Hints (UA-CH)',
-    category: 'APIs Web & Rastreo',
-    shortDefinition:
-      'Mecanismo moderno de negociación de cabeceras HTTP diseñado para reemplazar la cadena tradicional monolítica de User-Agent por solicitudes de datos granulares bajo demanda.',
-    detailedExplanation:
-      'Históricamente, la cabecera HTTP User-Agent enviaba de forma obligatoria en cada solicitud HTTP información exhaustiva sobre el sistema operativo, la arquitectura de la CPU y la versión exacta del navegador, otorgando entre 5 y 10 bits de entropía gratis a cualquier servidor. Con UA-CH, el navegador solo envía datos de bajo riesgo por defecto (ejemplo: marca y versión mayor del navegador). Información de alto riesgo (versión exacta del núcleo del SO, modelo de dispositivo) solo se comparte si el sitio web la solicita expresamente mediante cabeceras Accept-CH y el navegador lo aprueba.',
-    exampleOrFormula:
-      'Sec-CH-UA: "Chromium";v="128", "Not;A=Brand";v="24"  vs  Antiguo User-Agent de 150 caracteres.',
-    mitigationAdvice:
-      'Adoptado por el consorcio W3C y motores Chromium para mitigar la fuga pasiva de datos en cabeceras de red.',
+    id: 'clamping',
+    category: 'defence',
+    term: ['Fijación de hardware', 'Hardware clamping'],
+    short: ['Devolver siempre el mismo valor en las APIs de hardware.', 'Always returning the same value from hardware APIs.'],
+    detail: [
+      'navigator.hardwareConcurrency (hilos de CPU) y navigator.deviceMemory (memoria, solo Chromium) dicen mucho de un equipo: 32 hilos y 32 GB no son comunes. La defensa devuelve un valor fijo y oculta la memoria.',
+      'navigator.hardwareConcurrency (CPU threads) and navigator.deviceMemory (memory, Chromium only) say a lot about a machine: 32 threads and 32 GB are not common. The defence returns a fixed value and hides memory.',
+    ],
+    advice: ['Tor Browser, Mullvad Browser y Firefox con resistFingerprinting.', 'Tor Browser, Mullvad Browser and Firefox with resistFingerprinting.'],
+  },
+  {
+    id: 'uach',
+    category: 'api',
+    term: ['User-Agent Client Hints', 'User-Agent Client Hints'],
+    short: ['Sustituto del User-Agent en Chromium: menos datos por defecto, más solo si la web los pide.', 'Chromium\'s User-Agent replacement: less data by default, more only on request.'],
+    detail: [
+      'La cadena User-Agent clásica aporta entre 7 y 10 bits según el estudio. Con Client Hints, Chromium envía de serie marca y versión principal; la versión exacta del sistema o el modelo del dispositivo solo se envían si la web los pide con Accept-CH.',
+      'The classic User-Agent string gives 7 to 10 bits depending on the study. With Client Hints, Chromium sends brand and major version by default; the exact OS version or device model are only sent if the site asks with Accept-CH.',
+    ],
+    example: 'Sec-CH-UA: "Chromium";v="128", "Not;A=Brand";v="24"',
+    advice: ['Reduce la información pasiva, pero una web que la pida la obtiene.', 'Reduces passive information, but a site that asks gets it.'],
+  },
+  {
+    id: 'eprivacy',
+    category: 'law',
+    term: ['Consentimiento (ePrivacy, art. 5.3)', 'Consent (ePrivacy, art. 5(3))'],
+    short: ['En la UE, leer información del dispositivo para rastrear exige consentimiento.', 'In the EU, reading device information for tracking requires consent.'],
+    detail: [
+      'El artículo 5.3 de la Directiva ePrivacy no habla solo de cookies: cubre cualquier acceso a información del equipo del usuario. El Grupo de Trabajo del Artículo 29 lo aplicó expresamente a la huella digital (Dictamen 9/2014) y el Comité Europeo de Protección de Datos amplió ese alcance en sus Directrices 2/2023. Si además se trata como dato personal, se aplica el RGPD.',
+      'Article 5(3) of the ePrivacy Directive is not only about cookies: it covers any access to information on the user\'s device. The Article 29 Working Party applied it explicitly to fingerprinting (Opinion 9/2014) and the European Data Protection Board broadened that scope in its Guidelines 2/2023. If treated as personal data, the GDPR applies too.',
+    ],
+    advice: ['Rechazar en el banner también debería evitar la huella. Si no, es denunciable ante la AEPD.', 'Rejecting in the banner should also prevent fingerprinting. If not, it can be reported to the data protection authority.'],
   },
 ];
 
 export const GlossarySection: React.FC = () => {
-  const [openId, setOpenId] = useState<string | null>('canvas-fingerprinting');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const { t, lang } = useUi();
+  const pick = (p: Pair) => (lang === 'es' ? p[0] : p[1]);
+  const [open, setOpen] = useState<string | null>('canvas');
+  const [query, setQuery] = useState('');
+  const [cat, setCat] = useState<Category | 'all'>('all');
 
-  const categories = ['Todas', 'Criptografía & Matemáticas', 'APIs Web & Rastreo', 'Redes', 'Contramedidas'];
+  const cats: Array<[Category | 'all', string]> = [
+    ['all', t('Todas', 'All')],
+    ['math', t('Matemáticas', 'Maths')],
+    ['api', t('APIs y rastreo', 'APIs and tracking')],
+    ['network', t('Redes', 'Networking')],
+    ['defence', t('Defensas', 'Defences')],
+    ['law', t('Ley', 'Law')],
+  ];
+  const icon = (c: Category) => (c === 'math' ? Key : c === 'defence' ? Shield : c === 'network' ? Layers : c === 'law' ? Scale : Cpu);
 
-  const filteredTerms = GLOSSARY_TERMS.filter((item) => {
-    const matchesSearch =
-      item.term.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.shortDefinition.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.detailedExplanation.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'Todas' || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  const toggleTerm = (id: string) => {
-    setOpenId((prev) => (prev === id ? null : id));
-  };
+  const q = query.toLowerCase();
+  const list = TERMS.filter(
+    (x) => (cat === 'all' || x.category === cat) && [pick(x.term), pick(x.short), pick(x.detail)].some((s) => s.toLowerCase().includes(q))
+  );
 
   return (
-    <section id="glosario" className="scroll-mt-20 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+    <section id="glosario" className="scroll-mt-24 space-y-5">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-950 text-cyan-400 border border-cyan-800 text-xs font-mono">
-              07
-            </span>
-            <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              <BookMarked className="h-5 w-5 text-cyan-400" />
-              Glosario Didáctico de Ciberseguridad & Fingerprinting
-            </h2>
-          </div>
-          <p className="mt-1 text-sm text-slate-400">
-            Conceptos técnicos clave explicados con rigor pedagógico para comprender la arquitectura de la privacidad en la web.
-          </p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
+            <BookMarked className="h-5 w-5 text-cyan-400" />
+            {t('Glosario', 'Glossary')}
+          </h2>
+          <p className="mt-1 text-sm text-slate-400">{t('Los conceptos de esta página, explicados.', 'The concepts on this page, explained.')}</p>
         </div>
-
-        {/* Search Input */}
-        <div className="relative min-w-[260px]">
+        <label className="relative md:min-w-[260px]">
+          <span className="sr-only">{t('Buscar en el glosario', 'Search the glossary')}</span>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar término, fórmula o vector..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/90 pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('Buscar término…', 'Search term…')}
+            className="w-full rounded-lg border border-slate-800 bg-slate-900/90 pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
           />
-        </div>
+        </label>
       </div>
 
-      {/* Category Pills */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs text-slate-400 font-medium">Categorías:</span>
-        {categories.map((cat) => (
+      <div className="flex flex-wrap gap-2">
+        {cats.map(([c, label]) => (
           <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-2.5 py-1 text-xs rounded-full border transition-colors cursor-pointer ${
-              selectedCategory === cat
-                ? 'bg-cyan-950 text-cyan-300 border-cyan-700 font-semibold'
-                : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-            }`}
+            key={c}
+            onClick={() => setCat(c)}
+            className={`px-2.5 py-1 text-xs rounded-full border cursor-pointer ${cat === c ? 'bg-cyan-950 text-cyan-300 border-cyan-700 font-semibold' : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-slate-100'}`}
           >
-            {cat}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Accordion List */}
       <div className="space-y-3">
-        {filteredTerms.length === 0 ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-8 text-center text-slate-400 text-sm">
-            No se encontraron términos que coincidan con la búsqueda.
-          </div>
-        ) : (
-          filteredTerms.map((item) => {
-            const isOpen = openId === item.id;
-            return (
-              <div
-                key={item.id}
-                className={`rounded-xl border transition-all overflow-hidden ${
-                  isOpen
-                    ? 'border-cyan-500/50 bg-slate-900/80 shadow-md ring-1 ring-cyan-500/20'
-                    : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
-                }`}
-              >
-                <button
-                  onClick={() => toggleTerm(item.id)}
-                  className="w-full flex items-center justify-between p-4 text-left cursor-pointer focus:outline-none"
-                  aria-expanded={isOpen}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800/80 text-cyan-400 border border-slate-700 shrink-0">
-                      {item.category === 'Criptografía & Matemáticas' ? (
-                        <Key className="h-4 w-4" />
-                      ) : item.category === 'Contramedidas' ? (
-                        <Shield className="h-4 w-4" />
-                      ) : item.category === 'Redes' ? (
-                        <Layers className="h-4 w-4" />
-                      ) : (
-                        <Cpu className="h-4 w-4" />
-                      )}
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-white text-base">{item.term}</span>
-                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                          {item.category}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{item.shortDefinition}</p>
-                    </div>
-                  </div>
-                  <div className="ml-4 shrink-0 text-slate-400">
-                    {isOpen ? <ChevronUp className="h-5 w-5 text-cyan-400" /> : <ChevronDown className="h-5 w-5" />}
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-5 pt-1 border-t border-slate-800/80 space-y-4 text-xs text-slate-300">
-                    <div>
-                      <h4 className="font-semibold text-cyan-300 uppercase tracking-wider text-[11px] mb-1">
-                        Explicación Técnica Detallada
-                      </h4>
-                      <p className="leading-relaxed text-slate-300 text-sm">{item.detailedExplanation}</p>
-                    </div>
-
-                    {item.exampleOrFormula && (
-                      <div>
-                        <h4 className="font-semibold text-slate-400 uppercase tracking-wider text-[11px] mb-1">
-                          Ejemplo de Ejecución / Representación
-                        </h4>
-                        <pre className="p-3 rounded-lg bg-slate-950 font-mono text-[12px] text-cyan-300 border border-slate-800 overflow-x-auto">
-                          {item.exampleOrFormula}
-                        </pre>
-                      </div>
-                    )}
-
-                    <div className="rounded-lg bg-emerald-950/20 border border-emerald-800/50 p-3 flex items-start gap-2.5">
-                      <Shield className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-semibold text-emerald-300 block text-[11px] uppercase tracking-wider">
-                          Estrategia de Mitigación Recomendada
-                        </span>
-                        <p className="text-slate-300 mt-0.5">{item.mitigationAdvice}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
+        {list.length === 0 && (
+          <p className="rounded-xl border border-slate-800 bg-slate-900/40 p-8 text-center text-slate-400 text-sm">{t('No hay coincidencias.', 'No matches.')}</p>
         )}
+        {list.map((x) => {
+          const isOpen = open === x.id;
+          const Icon = icon(x.category);
+          return (
+            <div key={x.id} className={`rounded-xl border overflow-hidden ${isOpen ? 'border-cyan-500/50 bg-slate-900/80' : 'border-slate-800 bg-slate-900/40'}`}>
+              <button
+                onClick={() => setOpen(isOpen ? null : x.id)}
+                aria-expanded={isOpen}
+                className="w-full flex items-center justify-between gap-3 p-4 text-left cursor-pointer"
+              >
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800/80 text-cyan-400 border border-slate-700 shrink-0">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-bold text-slate-100 text-sm sm:text-base block">{pick(x.term)}</span>
+                    <span className="text-xs text-slate-400 block">{pick(x.short)}</span>
+                  </span>
+                </span>
+                <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-cyan-400' : ''}`} />
+              </button>
+              {isOpen && (
+                <div className="px-5 pb-5 pt-1 border-t border-slate-800/80 space-y-4 text-xs text-slate-300">
+                  <p className="leading-relaxed text-sm">{pick(x.detail)}</p>
+                  {x.example && (
+                    <pre className="p-3 rounded-lg bg-slate-950 font-mono text-[12px] text-cyan-300 border border-slate-800 overflow-x-auto whitespace-pre-wrap">{x.example}</pre>
+                  )}
+                  <div className="rounded-lg bg-emerald-950/20 border border-emerald-800/50 p-3 flex items-start gap-2.5">
+                    <Shield className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <p>{pick(x.advice)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </section>
   );
