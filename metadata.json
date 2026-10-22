@@ -1,6 +1,0 @@
-{
-  "name": "Simulador de Huella Digital y Rastreo de Navegador",
-  "description": "Herramienta formativa e interactiva de inspección de huella digital del navegador (Canvas, WebGL, fuentes, hardware), cálculo de entropía de Shannon, mitigaciones y desmitificación del modo incógnito.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

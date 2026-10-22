@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { FullFingerprintReport, WebRTCLeakData, DefenseSettings } from './types/fingerprint';
-import { generateFingerprintReport } from './services/fingerprintCollector';
-import { detectWebRTCLeak } from './services/webRtcDetector';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Compass, Sparkles, X } from 'lucide-react';
+import type { DefenseSettings, FullFingerprintReport, ProfileId, StudyId } from './types/fingerprint';
+import { ALL_DEFENSES, NO_DEFENSES, generateFingerprintReport } from './services/fingerprintCollector';
+import { DEFAULT_STUDY, STUDIES, estimateEntropy } from './services/entropyModel';
+import { STORAGE, readStorage, useUi, writeStorage } from './i18n';
 import { Header } from './components/Header';
 import { ProfileSwitcher } from './components/ProfileSwitcher';
 import { HeroOverview } from './components/HeroOverview';
@@ -18,331 +20,188 @@ import { EducationalGuides } from './components/EducationalGuides';
 import { Footer } from './components/Footer';
 import { ForensicReportModal } from './components/ForensicReportModal';
 import { GuidedTour } from './components/GuidedTour';
-import { Compass, Sparkles, X } from 'lucide-react';
+
+const PRESET_SETTINGS: Record<'brave' | 'tor', DefenseSettings> = {
+  brave: { ...NO_DEFENSES, canvasPoisoning: true },
+  tor: ALL_DEFENSES,
+};
+
+function initialStudy(): StudyId {
+  const saved = readStorage(STORAGE.study);
+  return saved && saved in STUDIES ? (saved as StudyId) : DEFAULT_STUDY;
+}
 
 export default function App() {
-  const [profileId, setProfileId] = useState<'real' | 'incognito' | 'brave' | 'tor' | 'custom'>('real');
-  const [defenseSettings, setDefenseSettings] = useState<DefenseSettings>({
-    canvasPoisoning: false,
-    webglMasking: false,
-    letterboxing: false,
-    fontRestriction: false,
-    hardwareClamping: false,
-    timezoneNormalization: false,
-    userAgentSpoofing: false,
-  });
-
+  const { t } = useUi();
+  const [profileId, setProfileId] = useState<ProfileId>('real');
+  const [defenses, setDefenses] = useState<DefenseSettings>(NO_DEFENSES);
   const [report, setReport] = useState<FullFingerprintReport | null>(null);
-  const [webRtcData, setWebRtcData] = useState<WebRTCLeakData | null>(null);
-  const [isScanning, setIsScanning] = useState<boolean>(true);
-  const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
-  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
-  const [showTourBanner, setShowTourBanner] = useState<boolean>(false);
-  const [activeSection, setActiveSection] = useState<string>('inspeccion');
-  const [isHighContrast, setIsHighContrast] = useState<boolean>(() => {
-    return localStorage.getItem('privacy_probe_high_contrast') === 'true';
-  });
+  const [realReport, setRealReport] = useState<FullFingerprintReport | null>(null);
+  const [study, setStudyState] = useState<StudyId>(initialStudy);
+  const [isScanning, setIsScanning] = useState(true);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [showTourBanner, setShowTourBanner] = useState(false);
 
-  // Check if first-time visitor to offer the tour
-  useEffect(() => {
-    const tourSeen = localStorage.getItem('privacy_probe_tour_completed');
-    if (!tourSeen) {
-      const timer = setTimeout(() => {
-        setShowTourBanner(true);
-      }, 1800);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
-  // Toggle High Contrast class on root
-  useEffect(() => {
-    if (isHighContrast) {
-      document.documentElement.classList.add('high-contrast');
-      localStorage.setItem('privacy_probe_high_contrast', 'true');
-    } else {
-      document.documentElement.classList.remove('high-contrast');
-      localStorage.setItem('privacy_probe_high_contrast', 'false');
-    }
-  }, [isHighContrast]);
-
-  const runScan = useCallback(
-    async (
-      targetProfile: 'real' | 'incognito' | 'brave' | 'tor' | 'custom' = profileId,
-      customDefenses?: DefenseSettings
-    ) => {
-      setIsScanning(true);
-      try {
-        const [newReport, newRtc] = await Promise.all([
-          generateFingerprintReport(targetProfile, customDefenses || defenseSettings),
-          detectWebRTCLeak(),
-        ]);
-        setReport(newReport);
-        setWebRtcData(newRtc);
-      } catch (err) {
-        console.error('Error durante el análisis de huella digital:', err);
-      } finally {
-        setIsScanning(false);
-      }
-    },
-    [profileId, defenseSettings]
-  );
-
-  useEffect(() => {
-    runScan('real');
-  }, []);
-
-  const handleSelectProfile = (newProfile: 'real' | 'incognito' | 'brave' | 'tor' | 'custom') => {
-    setProfileId(newProfile);
-
-    let updatedDefenses: DefenseSettings = { ...defenseSettings };
-    if (newProfile === 'real' || newProfile === 'incognito') {
-      updatedDefenses = {
-        canvasPoisoning: false,
-        webglMasking: false,
-        letterboxing: false,
-        fontRestriction: false,
-        hardwareClamping: false,
-        timezoneNormalization: false,
-        userAgentSpoofing: false,
-      };
-    } else if (newProfile === 'brave') {
-      updatedDefenses = {
-        canvasPoisoning: true,
-        webglMasking: false,
-        letterboxing: false,
-        fontRestriction: false,
-        hardwareClamping: false,
-        timezoneNormalization: false,
-        userAgentSpoofing: false,
-      };
-    } else if (newProfile === 'tor') {
-      updatedDefenses = {
-        canvasPoisoning: true,
-        webglMasking: true,
-        letterboxing: true,
-        fontRestriction: true,
-        hardwareClamping: true,
-        timezoneNormalization: true,
-        userAgentSpoofing: true,
-      };
-    }
-
-    setDefenseSettings(updatedDefenses);
-    runScan(newProfile, updatedDefenses);
+  const setStudy = (s: StudyId) => {
+    setStudyState(s);
+    writeStorage(STORAGE.study, s);
   };
 
-  const handleUpdateSetting = (key: keyof DefenseSettings, value: boolean) => {
-    const updated = { ...defenseSettings, [key]: value };
-    setDefenseSettings(updated);
+  useEffect(() => {
+    if (readStorage(STORAGE.tour)) return;
+    const timer = setTimeout(() => setShowTourBanner(true), 1800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const runScan = useCallback(async (target: ProfileId, settings: DefenseSettings) => {
+    setIsScanning(true);
+    try {
+      const next = await generateFingerprintReport(target, settings);
+      setReport(next);
+      if (target === 'real') setRealReport(next);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsScanning(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    runScan('real', NO_DEFENSES);
+  }, [runScan]);
+
+  const selectProfile = (p: ProfileId) => {
+    const settings = p === 'brave' || p === 'tor' ? PRESET_SETTINGS[p] : p === 'custom' ? defenses : NO_DEFENSES;
+    setProfileId(p);
+    setDefenses(settings);
+    runScan(p, settings);
+  };
+
+  const updateDefense = (key: keyof DefenseSettings, value: boolean) => {
+    const settings = { ...defenses, [key]: value };
+    setDefenses(settings);
     setProfileId('custom');
-    runScan('custom', updated);
+    runScan('custom', settings);
   };
 
-  const handleApplyPreset = (preset: 'none' | 'brave' | 'tor' | 'max') => {
-    let updated: DefenseSettings;
-    if (preset === 'none') {
-      updated = {
-        canvasPoisoning: false,
-        webglMasking: false,
-        letterboxing: false,
-        fontRestriction: false,
-        hardwareClamping: false,
-        timezoneNormalization: false,
-        userAgentSpoofing: false,
-      };
-      setProfileId('real');
-    } else if (preset === 'brave') {
-      updated = {
-        canvasPoisoning: true,
-        webglMasking: false,
-        letterboxing: false,
-        fontRestriction: false,
-        hardwareClamping: false,
-        timezoneNormalization: false,
-        userAgentSpoofing: false,
-      };
-      setProfileId('brave');
-    } else if (preset === 'tor') {
-      updated = {
-        canvasPoisoning: true,
-        webglMasking: true,
-        letterboxing: true,
-        fontRestriction: true,
-        hardwareClamping: true,
-        timezoneNormalization: true,
-        userAgentSpoofing: true,
-      };
-      setProfileId('tor');
-    } else {
-      updated = {
-        canvasPoisoning: true,
-        webglMasking: true,
-        letterboxing: true,
-        fontRestriction: true,
-        hardwareClamping: true,
-        timezoneNormalization: true,
-        userAgentSpoofing: true,
-      };
-      setProfileId('custom');
-    }
-    setDefenseSettings(updated);
-    runScan(preset === 'max' ? 'custom' : preset === 'none' ? 'real' : preset, updated);
+  const applyPreset = (preset: 'none' | 'brave' | 'tor') => {
+    if (preset === 'none') return selectProfile('real');
+    selectProfile(preset);
   };
 
-  const handleNavigate = (sectionId: string) => {
-    setActiveSection(sectionId);
-    const el = document.getElementById(sectionId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  const estimate = useMemo(() => (report ? estimateEntropy(report, study) : null), [report, study]);
+
+  const closeTourBanner = () => {
+    setShowTourBanner(false);
+    writeStorage(STORAGE.tour, '1');
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
-      {/* Fixed / Sticky Header */}
       <Header
-        onRescan={() => runScan(profileId, defenseSettings)}
+        onRescan={() => runScan(profileId, defenses)}
         isScanning={isScanning}
-        activeSection={activeSection}
-        onNavigate={handleNavigate}
-        onOpenReport={() => setIsReportModalOpen(true)}
-        isHighContrast={isHighContrast}
-        onToggleHighContrast={() => setIsHighContrast(!isHighContrast)}
+        onOpenReport={() => setIsReportOpen(true)}
         onStartTour={() => setIsTourOpen(true)}
+        reportReady={!!report}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
-        {/* Profile Switcher & Simulator Bar */}
-        <ProfileSwitcher
-          currentProfile={profileId}
-          onSelectProfile={handleSelectProfile}
-          totalEntropyBits={report ? report.totalEntropyBits : 0}
-        />
+        <ProfileSwitcher current={profileId} onSelect={selectProfile} sumBits={estimate?.sumBits ?? 0} isScanning={isScanning} />
 
-        {/* Hero Section: Live Entropy Overview & Composite Hash */}
-        {report && <HeroOverview report={report} />}
-
-        {/* Section 1: Incognito Debunker (The Myth of Anonymous Browsing) */}
-        {report && <IncognitoDebunker report={report} />}
-
-        {/* Section 2: Side-by-side Profile Comparison Panel */}
-        <ProfileComparisonPanel currentLiveReport={report || undefined} />
-
-        {/* Section 3: Cross-Context Tracking Simulator (3 domains with same hash) */}
-        {report && <CrossContextSimulator report={report} />}
-
-        {/* Section 3: Telemetry Inspection Grid (Canvas, WebGL, Fonts, Hardware) */}
-        {report && <TelemetryInspectionGrid report={report} />}
-
-        {/* Section 4: WebRTC Leak Diagnostics */}
-        <WebRTCLeakTester />
-
-        {/* Section 5: Shannon Entropy Mathematical Explorer (with Recharts chart) */}
-        {report && <EntropyMathExplorer report={report} />}
-
-        {/* Section 6: Interactive Defense & Mitigation Lab */}
-        {report && (
-          <MitigationLab
-            settings={defenseSettings}
-            onUpdateSetting={handleUpdateSetting}
-            onApplyPreset={handleApplyPreset}
-            totalEntropyBits={report.totalEntropyBits}
-          />
+        {report && estimate ? (
+          <>
+            <HeroOverview report={report} estimate={estimate} study={study} onStudyChange={setStudy} />
+            <IncognitoDebunker report={report} />
+            <ProfileComparisonPanel liveReport={realReport} study={study} />
+            <CrossContextSimulator report={report} />
+            <TelemetryInspectionGrid report={report} estimate={estimate} />
+            <WebRTCLeakTester />
+            <EntropyMathExplorer estimate={estimate} study={study} onStudyChange={setStudy} />
+            <MitigationLab
+              settings={defenses}
+              profileId={profileId}
+              onUpdate={updateDefense}
+              onPreset={applyPreset}
+              estimate={estimate}
+            />
+          </>
+        ) : (
+          <div className="py-24 text-center text-sm text-slate-400" role="status">
+            {t('Analizando tu navegador…', 'Analysing your browser…')}
+          </div>
         )}
 
-        {/* Section 7: Historical Cases & Landmark Lawsuits */}
         <HistoricalCases />
-
-        {/* Section 8: Interactive Glossary */}
         <GlossarySection />
-
-        {/* Section 9: Practical Navigation Guide & Browser Advice */}
         <EducationalGuides />
       </main>
 
-      {/* Official Footer with Website Link & Copyright */}
       <Footer />
 
-      {/* Forensic Report Modal with structured jsPDF PDF Export */}
-      {report && (
-        <ForensicReportModal
-          isOpen={isReportModalOpen}
-          onClose={() => setIsReportModalOpen(false)}
-          report={report}
-        />
+      {report && estimate && (
+        <ForensicReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} report={report} estimate={estimate} />
       )}
 
-      {/* Guided Tour Modal & Spotlight Overlay */}
       <GuidedTour
         isOpen={isTourOpen}
         onClose={() => setIsTourOpen(false)}
         onComplete={() => {
           setIsTourOpen(false);
-          setShowTourBanner(false);
+          closeTourBanner();
         }}
       />
 
-      {/* First-time visitor gentle prompt banner */}
       {showTourBanner && !isTourOpen && (
         <aside
-          role="region"
-          aria-label="Invitación a tour interactivo"
-          className="fixed bottom-20 right-4 sm:right-6 z-40 max-w-sm rounded-xl border border-cyan-500/40 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-lg ring-1 ring-cyan-500/20"
+          aria-label={t('Invitación al recorrido guiado', 'Guided tour invitation')}
+          className="fixed bottom-20 right-4 sm:right-6 z-40 max-w-sm rounded-xl border border-cyan-500/40 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-lg"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold uppercase tracking-wider">
               <Sparkles className="h-4 w-4" />
-              <span>Tour de Bienvenida</span>
+              <span>{t('Recorrido guiado', 'Guided tour')}</span>
             </div>
             <button
-              onClick={() => {
-                setShowTourBanner(false);
-                localStorage.setItem('privacy_probe_tour_completed', 'true');
-              }}
-              className="text-slate-400 hover:text-white transition-colors p-0.5 cursor-pointer"
-              title="Descartar invitación"
-              aria-label="Descartar invitación"
+              onClick={closeTourBanner}
+              className="text-slate-400 hover:text-slate-100 p-0.5 cursor-pointer"
+              aria-label={t('Cerrar', 'Close')}
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
           <p className="mt-1.5 text-xs text-slate-300 leading-relaxed">
-            ¿Es tu primera vez investigando huellas digitales? Descubre los puntos críticos como el
-            <strong> panel de entropía</strong> y el <strong>laboratorio de mitigaciones</strong> en 1 minuto.
+            {t(
+              '¿Primera vez? En un minuto te enseño dónde mirar: tu huella, la estimación de entropía y el laboratorio de defensas.',
+              'First time here? In one minute I will show you where to look: your fingerprint, the entropy estimate and the defence lab.'
+            )}
           </p>
           <div className="mt-3 flex items-center justify-end gap-2">
-            <button
-              onClick={() => {
-                setShowTourBanner(false);
-                localStorage.setItem('privacy_probe_tour_completed', 'true');
-              }}
-              className="text-xs text-slate-400 hover:text-slate-200 px-2.5 py-1 transition-colors cursor-pointer"
-            >
-              Más tarde
+            <button onClick={closeTourBanner} className="text-xs text-slate-400 hover:text-slate-200 px-2.5 py-1 cursor-pointer">
+              {t('Más tarde', 'Later')}
             </button>
             <button
               onClick={() => {
                 setShowTourBanner(false);
                 setIsTourOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-white cursor-pointer"
             >
               <Compass className="h-3.5 w-3.5" />
-              <span>Iniciar Tour</span>
+              <span>{t('Empezar', 'Start')}</span>
             </button>
           </div>
         </aside>
       )}
 
-      {/* Floating Tour Button (quick access from anywhere on the page) */}
       <button
         onClick={() => setIsTourOpen(true)}
-        title="Abrir Tour Guiado Interactivo"
-        aria-label="Abrir Tour Guiado Interactivo"
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 hover:text-white px-3.5 py-2 shadow-xl hover:shadow-cyan-950/50 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 group cursor-pointer"
+        aria-label={t('Abrir el recorrido guiado', 'Open the guided tour')}
+        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-slate-900/90 hover:bg-slate-800 text-cyan-300 px-3.5 py-2 shadow-xl text-xs font-semibold backdrop-blur-md cursor-pointer group"
       >
         <Compass className="h-4 w-4 text-cyan-400 transition-transform group-hover:rotate-45" />
-        <span className="hidden sm:inline">Tour Guiado</span>
+        <span className="hidden sm:inline">{t('Recorrido', 'Tour')}</span>
       </button>
     </div>
   );

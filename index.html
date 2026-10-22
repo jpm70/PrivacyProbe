@@ -1,20 +1,32 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Simulador de Huella Digital y Rastreo de Navegador | Un Fantasma en el Sistema</title>
-    <meta name="description" content="Herramienta interactiva de inspección de huella digital técnica (Canvas, WebGL, fuentes, hardware), cálculo de entropía de Shannon, mitigaciones y desmitificación del modo incógnito." />
-    <meta property="og:title" content="Simulador de Huella Digital y Rastreo de Navegador" />
-    <meta property="og:description" content="Inspecciona los datos técnicos expuestos por tu navegador, calcula tu entropía de unicidad y comprende por qué el modo incógnito no otorga anonimato." />
+    <title>PrivacyProbe · Huella digital del navegador | Un fantasma en el sistema</title>
+    <meta
+      name="description"
+      content="Mira qué datos expone tu navegador (canvas, WebGL, fuentes, pantalla, audio, WebRTC), cuánta información aportan según estudios reales y qué defensas funcionan. Todo se calcula en tu navegador."
+    />
+    <meta name="theme-color" content="#020617" />
+    <meta property="og:title" content="PrivacyProbe · Huella digital del navegador" />
+    <meta property="og:description" content="Tu huella digital, medida en tu navegador y comparada con estudios reales. Por Un fantasma en el sistema." />
     <meta property="og:type" content="website" />
-    <link rel="icon" type="image/png" href="/assets/aistudio/icono_81a3db5b.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <meta property="og:image" content="icono.png" />
+    <link rel="icon" type="image/png" href="/icono.png" />
+    <script>
+      // Aplica idioma y tema guardados antes de pintar, para evitar un parpadeo.
+      try {
+        var th = localStorage.getItem('pp_theme');
+        if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
+        var lg = localStorage.getItem('pp_lang');
+        if (lg === 'es' || lg === 'en') document.documentElement.lang = lg;
+      } catch (e) {}
+    </script>
   </head>
-  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500/20 selection:text-cyan-200">
+  <body>
     <div id="root"></div>
+    <noscript>PrivacyProbe necesita JavaScript: mide lo que JavaScript puede leer de tu navegador. · PrivacyProbe needs JavaScript.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

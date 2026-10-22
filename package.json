@@ -1,23 +1,22 @@
 {
-  "name": "privacy-probe-browser-fingerprint-simulator",
-  "version": "1.0.0",
-  "description": "Simulador interactivo y pedagógico de Huella Digital y Rastreo de Navegador (Canvas, WebGL, Fuentes, Hardware, Entropía de Shannon y Desmitificación del Modo Incógnito) por Un Fantasma en el Sistema.",
+  "name": "privacyprobe",
+  "version": "2.0.0",
+  "description": "Huella digital del navegador medida en local y comparada con estudios reales (Panopticlick, AmIUnique, Hiding in the Crowd). Por Un fantasma en el sistema.",
   "author": "Un Fantasma en el Sistema (https://www.unfantasmaenelsistema.com/)",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "vite --port=3000 --host=127.0.0.1",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "bun test tests"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "jspdf": "^2.5.2",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.10.1",
@@ -28,8 +27,11 @@
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "esbuild": "^0.25.0",
-    "tsx": "^4.21.0",
     "typescript": "^7.0.2"
+  },
+  "homepage": "https://unfantasmaenelsistema.github.io/PrivacyProbe/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unfantasmaenelsistema/PrivacyProbe.git"
   }
 }

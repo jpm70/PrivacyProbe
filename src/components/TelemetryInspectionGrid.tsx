@@ -1,447 +1,269 @@
 import React, { useState } from 'react';
-import {
-  Layers,
-  Cpu,
-  Monitor,
-  Type,
-  Volume2,
-  Compass,
-  Check,
-  X,
-  Search,
-  ZoomIn,
-} from 'lucide-react';
-import { FullFingerprintReport } from '../types/fingerprint';
+import { Check, Compass, Cpu, Layers, Monitor, Search, Type, Volume2, X, ZoomIn } from 'lucide-react';
+import type { AttributeId, EntropyEstimate, FullFingerprintReport } from '../types/fingerprint';
+import { STUDIES } from '../services/entropyModel';
+import { useUi } from '../i18n';
+import { fontCategory, statusClass, statusLabel } from '../labels';
 
-interface TelemetryInspectionGridProps {
+interface Props {
   report: FullFingerprintReport;
+  estimate: EntropyEstimate;
 }
 
-export const TelemetryInspectionGrid: React.FC<TelemetryInspectionGridProps> = ({ report }) => {
+const Field: React.FC<{ label: string; children: React.ReactNode; mono?: boolean }> = ({ label, children, mono = true }) => (
+  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80 min-w-0">
+    <span className="text-slate-400 block text-[11px]">{label}</span>
+    <span className={`text-slate-100 ${mono ? 'font-mono' : ''} font-semibold block mt-0.5 break-words`}>{children}</span>
+  </div>
+);
+
+export const TelemetryInspectionGrid: React.FC<Props> = ({ report, estimate }) => {
+  const { t, num } = useUi();
   const [fontFilter, setFontFilter] = useState<'all' | 'installed' | 'missing'>('all');
   const [fontSearch, setFontSearch] = useState('');
-  const [showCanvasMicroscope, setShowCanvasMicroscope] = useState(false);
+  const [microscope, setMicroscope] = useState(false);
 
-  const filteredFonts = report.fonts.details.filter((f) => {
-    const matchesSearch = f.name.toLowerCase().includes(fontSearch.toLowerCase());
-    if (fontFilter === 'installed') return matchesSearch && f.isInstalled;
-    if (fontFilter === 'missing') return matchesSearch && !f.isInstalled;
-    return matchesSearch;
+  const attr = (id: AttributeId) => estimate.attributes.find((a) => a.id === id)!;
+  const Badge = ({ ids }: { ids: AttributeId[] }) => {
+    const list = ids.map(attr);
+    const known = list.filter((a) => a.referenceBits !== null);
+    const status = list[0].status;
+    return (
+      <span className="flex flex-col items-end gap-1 shrink-0">
+        <span className="text-xs font-mono font-bold text-cyan-400">
+          {known.length ? `${num(known.reduce((s, a) => s + (a.referenceBits ?? 0), 0), 1)} bits` : t('sin dato', 'no data')}
+        </span>
+        <span className={`px-1.5 py-0.5 rounded border text-[10px] ${statusClass(status)}`}>{statusLabel(status, t)}</span>
+      </span>
+    );
+  };
+
+  const fonts = report.fonts.details.filter((f) => {
+    const match = f.name.toLowerCase().includes(fontSearch.toLowerCase());
+    if (fontFilter === 'installed') return match && f.isInstalled;
+    if (fontFilter === 'missing') return match && !f.isInstalled;
+    return match;
   });
 
-  return (
-    <section id="inspeccion" className="px-6 py-12 border-b border-slate-800/80 bg-slate-950">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 max-w-2xl">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-2">
-            <Layers className="h-4 w-4" />
-            <span>Inspección Técnica en Profundidad</span>
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            Datos técnicos expuestos por tu navegador
-          </h2>
-          <p className="mt-2 text-sm text-slate-300">
-            Cada bloque a continuación representa un canal de información que cualquier sitio web o script de terceros
-            puede consultar de forma silenciosa mediante APIs públicas de JavaScript.
-          </p>
+  const cardCls = 'rounded-xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6 flex flex-col justify-between min-w-0';
+  const head = (Icon: React.ElementType, color: string, title: string, sub: string, ids: AttributeId[]) => (
+    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className={`p-2 rounded-lg ${color}`}>
+          <Icon className="h-4 w-4" />
         </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-slate-100">{title}</h3>
+          <span className="text-xs text-slate-400">{sub}</span>
+        </div>
+      </div>
+      <Badge ids={ids} />
+    </div>
+  );
+  const foot = (text: React.ReactNode) => <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">{text}</div>;
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Card 1: Canvas 2D Fingerprint */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
-                    <Layers className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Huella Gráfica de Canvas (2D)</h3>
-                    <span className="text-xs text-slate-400">Renderizado de subpíxeles y antialiasing</span>
-                  </div>
-                </div>
-                <span className="text-xs font-mono font-bold text-cyan-400">8.6 bits</span>
+  return (
+    <section id="inspeccion" data-tour="inspeccion" className="scroll-mt-24">
+      <div className="mb-6 max-w-3xl">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-2">
+          <Layers className="h-4 w-4" />
+          <span>{t('Datos técnicos', 'Technical data')}</span>
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">
+          {t('Lo que cualquier web puede leer de tu navegador', 'What any website can read from your browser')}
+        </h2>
+        <p className="mt-2 text-sm text-slate-300">
+          {t(
+            `Cada tarjeta es una API pública de JavaScript que no pide permiso. Los bits son los que midió ${STUDIES[estimate.study].name} (${STUDIES[estimate.study].year}) para ese atributo en su población, no los de tu valor concreto.`,
+            `Each card is a public JavaScript API that asks no permission. Bits are those ${STUDIES[estimate.study].name} (${STUDIES[estimate.study].year}) measured for that attribute in its population, not for your particular value.`
+          )}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className={cardCls}>
+          <div>
+            {head(Layers, 'bg-cyan-500/10 text-cyan-400', t('Lienzo (Canvas 2D)', 'Canvas 2D'), t('Subpíxeles, suavizado y emojis', 'Subpixels, antialiasing and emoji'), ['canvas'])}
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span>{t('Imagen que ha dibujado tu navegador:', 'Image your browser drew:')}</span>
+                <button onClick={() => setMicroscope(!microscope)} className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 cursor-pointer">
+                  <ZoomIn className="h-3.5 w-3.5" />
+                  {microscope ? t('Ocultar explicación', 'Hide explanation') : t('¿Cómo funciona el ruido?', 'How does noise work?')}
+                </button>
               </div>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                  <span>Lienzo renderizado por tu GPU:</span>
-                  <button
-                    onClick={() => setShowCanvasMicroscope(!showCanvasMicroscope)}
-                    className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                  >
-                    <ZoomIn className="h-3.5 w-3.5" />
-                    <span>{showCanvasMicroscope ? 'Ocultar Microscopio' : 'Microscopio de Píxeles'}</span>
-                  </button>
-                </div>
-
-                <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950 flex items-center justify-center p-2">
-                  {report.canvas.dataUrl ? (
-                    <img
-                      src={report.canvas.dataUrl}
-                      alt="Canvas Fingerprint Render"
-                      className="max-h-24 object-contain rounded"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="h-24 w-full flex items-center justify-center text-xs text-slate-500">
-                      Lienzo no soportado
-                    </div>
-                  )}
-
-                  {report.canvas.isPoisoned && (
-                    <div className="absolute top-2 right-2 bg-amber-500/90 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded shadow">
-                      Ruido Activo (Farbling)
-                    </div>
-                  )}
-                </div>
-
-                {showCanvasMicroscope && (
-                  <div className="mt-3 p-3 rounded-lg bg-slate-950 border border-cyan-500/30 text-xs">
-                    <div className="font-semibold text-cyan-300 mb-1">
-                      ¿Cómo funciona la mitigación por ruido (Farbling)?
-                    </div>
-                    <p className="text-slate-300 leading-relaxed text-[11px]">
-                      Navegadores como Brave inyectan una variación estocástica de ±1 en los canales RGB de píxeles
-                      seleccionados al invocar <code className="text-cyan-300">getImageData()</code> o <code className="text-cyan-300">toDataURL()</code>.
-                      El ojo humano percibe la misma imagen, pero la función de dispersión (hash criptográfico) cambia
-                      por completo en cada nueva sesión, imposibilitando el rastreo a largo plazo.
-                    </p>
-                  </div>
+              <div className="relative rounded-lg border border-slate-800 bg-slate-950 flex items-center justify-center p-2">
+                {report.canvas.dataUrl ? (
+                  <img src={report.canvas.dataUrl} alt={t('Lienzo de huella', 'Fingerprint canvas')} className="max-h-24 object-contain rounded" />
+                ) : (
+                  <div className="h-24 flex items-center text-xs text-slate-500">{t('Canvas no disponible', 'Canvas not available')}</div>
                 )}
               </div>
-
+              {microscope && (
+                <p className="mt-3 p-3 rounded-lg bg-slate-950 border border-cyan-500/30 text-[11px] text-slate-300 leading-relaxed">
+                  {t(
+                    'Brave suma o resta 1 a algunos canales de color al leer el lienzo (getImageData/toDataURL), con una semilla distinta por web y por sesión. La imagen se ve igual, pero el hash cambia y deja de servir para enlazar visitas. Tor hace otra cosa: si no lo autorizas, el script recibe una imagen en blanco, igual para todos.',
+                    'Brave adds or subtracts 1 from some colour channels when the canvas is read (getImageData/toDataURL), with a different seed per site and session. The image looks the same but the hash changes and no longer links visits. Tor does something else: unless you allow it, the script receives a blank image, the same for everyone.'
+                  )}
+                </p>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Hash del Lienzo:</span>
-                  <code className="text-cyan-300 font-mono font-semibold block truncate mt-0.5">
-                    {report.canvas.hash}
-                  </code>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Tiempo de Render:</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.canvas.executionTimeMs} ms
-                  </span>
-                </div>
+                <Field label="Hash">{report.canvas.hash}</Field>
+                <Field label={t('Tiempo de dibujo', 'Draw time')}>{num(report.canvas.executionTimeMs, 2)} ms</Field>
               </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              Incluso con el mismo navegador, una gráfica Intel vs NVIDIA o controladores distintos generan valores de píxel divergentes.
             </div>
           </div>
+          {foot(t('El mismo navegador en una GPU Intel o NVIDIA, o con otro controlador, dibuja píxeles distintos.', 'The same browser on an Intel or NVIDIA GPU, or with another driver, draws different pixels.'))}
+        </div>
 
-          {/* Card 2: WebGL & GPU */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <Cpu className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">WebGL & Tarjeta Gráfica</h3>
-                    <span className="text-xs text-slate-400">Identificación por hardware de vídeo 3D</span>
-                  </div>
-                </div>
-                <span className="text-xs font-mono font-bold text-emerald-400">7.8 bits</span>
-              </div>
-
+        <div className={cardCls}>
+          <div>
+            {head(Cpu, 'bg-emerald-500/10 text-emerald-400', t('GPU (WebGL)', 'GPU (WebGL)'), t('Fabricante y modelo de la gráfica', 'Graphics vendor and model'), ['webgl'])}
+            {report.webgl.supported ? (
               <div className="mt-4 space-y-2.5 text-xs">
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
-                  <span className="text-slate-400">Fabricante de GPU (Vendor):</span>
-                  <span className="text-white font-mono font-semibold truncate max-w-xs">
-                    {report.webgl.unmaskedVendor}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
-                  <span className="text-slate-400">Modelo Renderizador:</span>
-                  <span className="text-cyan-300 font-mono font-semibold truncate max-w-xs">
-                    {report.webgl.unmaskedRenderer}
-                  </span>
-                </div>
+                <Field label={t('Fabricante', 'Vendor')}>{report.webgl.unmaskedVendor || report.webgl.vendor || '—'}</Field>
+                <Field label={t('Modelo (renderizador)', 'Model (renderer)')}>{report.webgl.unmaskedRenderer || report.webgl.renderer || '—'}</Field>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <span className="text-slate-400 block text-[11px]">Versión de Shaders:</span>
-                    <span className="text-white font-mono block mt-0.5 truncate">{report.webgl.glVersion}</span>
-                  </div>
-                  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <span className="text-slate-400 block text-[11px]">Extensiones WebGL:</span>
-                    <span className="text-white font-mono block mt-0.5">{report.webgl.extensionsCount} soportadas</span>
-                  </div>
+                  <Field label={t('Versión', 'Version')}>{report.webgl.glVersion}</Field>
+                  <Field label={t('Extensiones', 'Extensions')}>{report.webgl.extensionsCount}</Field>
                 </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
-                  <span className="text-slate-400">Hash WebGL Shaders:</span>
-                  <code className="text-emerald-300 font-mono font-semibold">{report.webgl.hash}</code>
-                </div>
+                <Field label="Hash">{report.webgl.hash}</Field>
               </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              La extensión <code className="text-slate-300 font-mono">WEBGL_debug_renderer_info</code> revela la marca y
-              modelo físico de tu chip gráfico. Tor Browser la bloquea completamente.
-            </div>
+            ) : (
+              <p className="mt-4 text-xs text-slate-400">{t('WebGL no está disponible o está bloqueado.', 'WebGL is unavailable or blocked.')}</p>
+            )}
           </div>
+          {foot(
+            t(
+              'La extensión WEBGL_debug_renderer_info da el modelo real de la gráfica. Firefox con resistFingerprinting y Tor responden simplemente «Mozilla».',
+              'The WEBGL_debug_renderer_info extension gives the real graphics model. Firefox with resistFingerprinting and Tor simply answer "Mozilla".'
+            )
+          )}
+        </div>
 
-          {/* Card 3: System Fonts Catalog */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-                    <Type className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Enumeración de Fuentes Locales</h3>
-                    <span className="text-xs text-slate-400">
-                      {report.fonts.detectedCount} de {report.fonts.testedCount} tipografías detectadas
-                    </span>
-                  </div>
-                </div>
-                <span className="text-xs font-mono font-bold text-purple-400">
-                  {report.entropyBreakdown.find((b) => b.id === 'fonts')?.entropyBits.toFixed(1) || '8.2'} bits
-                </span>
-              </div>
-
-              <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
-                  <input
-                    type="text"
-                    value={fontSearch}
-                    onChange={(e) => setFontSearch(e.target.value)}
-                    placeholder="Buscar fuente..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+        <div className={cardCls}>
+          <div>
+            {head(
+              Type,
+              'bg-purple-500/10 text-purple-400',
+              t('Fuentes instaladas', 'Installed fonts'),
+              t(`${report.fonts.detectedCount} de ${report.fonts.testedCount} detectadas`, `${report.fonts.detectedCount} of ${report.fonts.testedCount} detected`),
+              ['fonts']
+            )}
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              <label className="relative flex-1">
+                <span className="sr-only">{t('Buscar fuente', 'Search font')}</span>
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                <input
+                  value={fontSearch}
+                  onChange={(e) => setFontSearch(e.target.value)}
+                  placeholder={t('Buscar fuente…', 'Search font…')}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                />
+              </label>
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-[11px]">
+                {(
+                  [
+                    ['all', t('Todas', 'All')],
+                    ['installed', t('Detectadas', 'Detected')],
+                    ['missing', t('Ausentes', 'Missing')],
+                  ] as const
+                ).map(([f, label]) => (
                   <button
-                    onClick={() => setFontFilter('all')}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                      fontFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
+                    key={f}
+                    onClick={() => setFontFilter(f)}
+                    className={`px-2.5 py-1 rounded cursor-pointer ${fontFilter === f ? 'bg-slate-800 text-slate-100' : 'text-slate-400 hover:text-slate-100'}`}
                   >
-                    Todas ({report.fonts.testedCount})
+                    {label}
                   </button>
-                  <button
-                    onClick={() => setFontFilter('installed')}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                      fontFilter === 'installed' ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Detectadas ({report.fonts.detectedCount})
-                  </button>
-                  <button
-                    onClick={() => setFontFilter('missing')}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                      fontFilter === 'missing' ? 'bg-rose-500/20 text-rose-300' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Ausentes
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-3 max-h-48 overflow-y-auto pr-1 space-y-1.5">
-                {filteredFonts.slice(0, 20).map((font) => (
-                  <div
-                    key={font.name}
-                    className="flex items-center justify-between px-3 py-1.5 rounded bg-slate-950/70 border border-slate-800/80 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      {font.isInstalled ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <X className="h-3.5 w-3.5 text-slate-600 shrink-0" />
-                      )}
-                      <span
-                        className={font.isInstalled ? 'text-white font-medium' : 'text-slate-500'}
-                        style={font.isInstalled ? { fontFamily: `"${font.name}", sans-serif` } : undefined}
-                      >
-                        {font.name}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">{font.category}</span>
-                  </div>
                 ))}
               </div>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              La presencia de fuentes como Calibri o Cascadia Code revela la instalación de Microsoft Office o Windows Terminal.
-            </div>
-          </div>
-
-          {/* Card 4: Screen & Display Geometry */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-                    <Monitor className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Geometría de Pantalla y DPI</h3>
-                    <span className="text-xs text-slate-400">Resolución, ventana y escala HiDPI</span>
-                  </div>
-                </div>
-                <span className="text-xs font-mono font-bold text-blue-400">4.8 bits</span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Resolución de Monitor:</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.display.screenWidth} x {report.display.screenHeight} px
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Área Disponible:</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.display.availWidth} x {report.display.availHeight} px
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Ratio de Píxeles (HiDPI):</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.display.devicePixelRatio}x
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Profundidad de Color:</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.display.colorDepth} bits por píxel
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 rounded-lg bg-slate-950 border border-slate-800">
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-semibold text-white">Mitigación por Letterboxing (Estilo Tor):</span>
-                  <span className="text-[11px] text-slate-400">
-                    {report.display.isLetterboxed ? 'Activo (1000x1000)' : 'Inactivo (Resolución Natural)'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Para evitar que los rastreadores deduzcan el tamaño exacto de tu ventana maximizada, Tor Browser
-                  añade barras grises automáticas alrededor del contenido para forzar una resolución fija estándar compartida.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              La diferencia entre screen.height y availHeight revela el grosor exacto de tu barra de tareas.
-            </div>
-          </div>
-
-          {/* Card 5: Hardware APIs & Audio */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400">
-                    <Volume2 className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Hardware, Audio & Hilos de CPU</h3>
-                    <span className="text-xs text-slate-400">Rastreo por capacidades de procesamiento</span>
-                  </div>
-                </div>
-                <span className="text-xs font-mono font-bold text-rose-400">4.5 bits</span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Hilos Lógicos (CPU):</span>
-                  <span className="text-cyan-300 font-mono font-semibold block mt-0.5">
-                    {report.hardware.hardwareConcurrency} núcleos lógicos
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Memoria Aproximada:</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.hardware.deviceMemory ? `${report.hardware.deviceMemory} GB` : 'No reportada'}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Puntos Táctiles (Touch):</span>
-                  <span className="text-white font-mono font-semibold block mt-0.5">
-                    {report.hardware.maxTouchPoints > 0
-                      ? `${report.hardware.maxTouchPoints} (Pantalla táctil)`
-                      : '0 (Solo ratón/teclado)'}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px]">Hash AudioContext:</span>
-                  <code className="text-rose-300 font-mono font-semibold block mt-0.5 truncate">
-                    {report.audio.hash}
-                  </code>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              El filtro DynamicsCompressor de Web Audio genera sumas distintas según la arquitectura matemática de la CPU.
-            </div>
-          </div>
-
-          {/* Card 6: Software, Platform & Locale */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400">
-                    <Compass className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">Identificadores de Entorno y Zona Horaria</h3>
-                    <span className="text-xs text-slate-400">User Agent, huso horario y preferencias</span>
-                  </div>
-                </div>
-                <span className="text-xs font-mono font-bold text-teal-400">5.3 bits</span>
-              </div>
-
-              <div className="mt-4 space-y-2.5 text-xs">
-                <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                  <span className="text-slate-400 block text-[11px] mb-1">User-Agent:</span>
-                  <code className="text-slate-200 font-mono text-[11px] block break-all">
-                    {report.environment.userAgent}
-                  </code>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <span className="text-slate-400 block text-[11px]">Zona Horaria:</span>
-                    <span className="text-white font-mono block mt-0.5">{report.environment.timezone}</span>
-                  </div>
-                  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <span className="text-slate-400 block text-[11px]">Desfase UTC:</span>
-                    <span className="text-white font-mono block mt-0.5">
-                      {report.environment.timezoneOffset} minutos
+            <ul className="mt-3 max-h-52 overflow-y-auto pr-1 space-y-1.5">
+              {fonts.map((f) => (
+                <li key={f.name} className="flex items-center justify-between px-3 py-1.5 rounded bg-slate-950/70 border border-slate-800/80 text-xs">
+                  <span className="flex items-center gap-2">
+                    {f.isInstalled ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <X className="h-3.5 w-3.5 text-slate-600" />}
+                    <span className={f.isInstalled ? 'text-slate-100 font-medium' : 'text-slate-500'} style={f.isInstalled ? { fontFamily: `"${f.name}", sans-serif` } : undefined}>
+                      {f.name}
                     </span>
-                  </div>
-                </div>
+                  </span>
+                  <span className="text-[10px] text-slate-500">{fontCategory(f.category, t)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          {foot(
+            t(
+              'Calibri o Aptos delatan Microsoft Office; Cascadia Code, Windows Terminal o Visual Studio. Los estudios enumeraban la lista completa de fuentes; aquí se prueban 39.',
+              'Calibri or Aptos reveal Microsoft Office; Cascadia Code, Windows Terminal or Visual Studio. The studies enumerated the full font list; here 39 are tested.'
+            )
+          )}
+        </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <span className="text-slate-400 block text-[11px]">Idioma Principal:</span>
-                    <span className="text-white font-mono block mt-0.5">{report.environment.language}</span>
-                  </div>
-                  <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <span className="text-slate-400 block text-[11px]">Do Not Track (DNT):</span>
-                    <span className="text-white font-mono block mt-0.5">
-                      {report.environment.doNotTrack || 'No especificado (Ignorado)'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
-              La cabecera Do Not Track es voluntaria y carece de fuerza técnica vinculante para los rastreadores.
+        <div className={cardCls}>
+          <div>
+            {head(Monitor, 'bg-blue-500/10 text-blue-400', t('Pantalla', 'Screen'), t('Resolución, color y escala', 'Resolution, colour and scale'), ['screen'])}
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+              <Field label={t('Resolución', 'Resolution')}>{report.display.screenWidth} × {report.display.screenHeight}</Field>
+              <Field label={t('Área disponible', 'Available area')}>{report.display.availWidth} × {report.display.availHeight}</Field>
+              <Field label={t('Escala (devicePixelRatio)', 'Scale (devicePixelRatio)')}>{report.display.devicePixelRatio}x</Field>
+              <Field label={t('Profundidad de color', 'Colour depth')}>{report.display.colorDepth} bit</Field>
+              <Field label={t('Ventana', 'Window')}>{report.display.windowInnerWidth} × {report.display.windowInnerHeight}</Field>
             </div>
           </div>
+          {foot(
+            t(
+              'La diferencia entre la altura de la pantalla y la disponible delata el tamaño de tu barra de tareas. Tor redondea la ventana a múltiplos de 200 × 100 (letterboxing).',
+              'The difference between screen height and available height reveals your taskbar size. Tor rounds the window to multiples of 200 × 100 (letterboxing).'
+            )
+          )}
+        </div>
+
+        <div className={cardCls}>
+          <div>
+            {head(Volume2, 'bg-rose-500/10 text-rose-400', t('Hardware y audio', 'Hardware and audio'), t('Núcleos, memoria, pantalla táctil y Web Audio', 'Cores, memory, touch screen and Web Audio'), ['hardware', 'audio'])}
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+              <Field label={t('Hilos de CPU', 'CPU threads')}>{report.hardware.hardwareConcurrency ?? t('no expuesto', 'not exposed')}</Field>
+              <Field label={t('Memoria (deviceMemory)', 'Memory (deviceMemory)')}>
+                {report.hardware.deviceMemory ? `${report.hardware.deviceMemory} GB` : t('no expuesta', 'not exposed')}
+              </Field>
+              <Field label={t('Puntos táctiles', 'Touch points')}>{report.hardware.maxTouchPoints}</Field>
+              <Field label={t('Hash de audio', 'Audio hash')}>{report.audio.supported ? report.audio.hash : t('no disponible', 'not available')}</Field>
+            </div>
+          </div>
+          {foot(
+            t(
+              'deviceMemory solo existe en navegadores Chromium y se redondea. Ninguno de los tres estudios midió estos atributos, así que no entran en la suma, aunque también distinguen.',
+              'deviceMemory only exists in Chromium browsers and is rounded. None of the three studies measured these attributes, so they are not in the sum, although they also distinguish.'
+            )
+          )}
+        </div>
+
+        <div className={cardCls}>
+          <div>
+            {head(Compass, 'bg-teal-500/10 text-teal-400', t('Entorno', 'Environment'), t('User-Agent, idiomas, zona horaria', 'User-Agent, languages, time zone'), ['userAgent', 'language', 'timezone', 'platform', 'dnt'])}
+            <div className="mt-4 space-y-2.5 text-xs">
+              <Field label="User-Agent">
+                <span className="font-normal text-[11px] break-all">{report.environment.userAgent}</span>
+              </Field>
+              <div className="grid grid-cols-2 gap-2.5">
+                <Field label={t('Idiomas', 'Languages')}>{report.environment.languages.join(', ')}</Field>
+                <Field label={t('Zona horaria', 'Time zone')}>{report.environment.timezone}</Field>
+                <Field label={t('Plataforma', 'Platform')}>{report.hardware.platform || '—'}</Field>
+                <Field label="Do Not Track">{report.environment.doNotTrack ?? t('sin valor', 'unset')}</Field>
+                <Field label="Global Privacy Control">
+                  {report.environment.globalPrivacyControl === null ? t('no soportado', 'not supported') : String(report.environment.globalPrivacyControl)}
+                </Field>
+              </div>
+            </div>
+          </div>
+          {foot(
+            t(
+              'Do Not Track nunca obligó a nadie y ya está en desuso; Global Privacy Control sí tiene efecto legal en algunos estados de EE. UU. (como California).',
+              'Do Not Track never bound anyone and is deprecated; Global Privacy Control does have legal effect in some US states (such as California).'
+            )
+          )}
         </div>
       </div>
     </section>
